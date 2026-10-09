@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TP1212 制板下单记录</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}
+/* Layout: fab-notes sheet. Spec block on top, then a numbered stage log, then a to-scale price comparison. */
+:root{
+  --bg:#f3f5f4;--surface:#ffffff;--fg:#17211d;--muted:#5b6862;--line:#d9dfdc;
+  --mask:#0f5c43;--mask-soft:#e1efe8;--copper:#a8601f;--copper-soft:#f6eadb;
+  --user:#e7eef8;--ok:#0f6b4a;color-scheme:light;
+  --sans:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101614;--surface:#18201d;--fg:#e6ece9;--muted:#93a29b;--line:#2a3430;
+  --mask:#4fc08f;--mask-soft:#16312780;--copper:#e0a468;--copper-soft:#2e2315;
+  --user:#1b2738;--ok:#58d19a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101614;--surface:#18201d;--fg:#e6ece9;--muted:#93a29b;--line:#2a3430;
+  --mask:#4fc08f;--mask-soft:#16312780;--copper:#e0a468;--copper-soft:#2e2315;
+  --user:#1b2738;--ok:#58d19a;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.7;padding-inline:16px}
+.page{max-width:820px;margin:0 auto;padding-block:32px 56px;display:flex;flex-direction:column;gap:32px}
+h1{font-size:clamp(24px,5vw,32px);line-height:1.2;margin:0;font-weight:600;text-wrap:balance}
+h2{font-size:17px;margin:0;font-weight:600;text-wrap:balance}
+p{margin:0}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--copper)}
+.sub{color:var(--muted);margin-top:6px}
+code{font-family:var(--mono);font-size:12.5px;background:var(--mask-soft);padding:1px 6px;border-radius:4px;overflow-wrap:anywhere}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.sheet-h{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.04em}
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.spec div{padding:12px 16px;border-bottom:1px solid var(--line);min-width:0}
+.spec dt{font-size:12px;color:var(--muted)}
+.spec dd{margin:2px 0 0;font-family:var(--mono);font-size:15px;font-weight:500}
+.spec .price dd{color:var(--copper)}
+.stage{display:grid;grid-template-columns:44px minmax(0,1fr);gap:0 14px}
+.stage + .stage{margin-top:28px}
+.idx{font-family:var(--mono);font-size:13px;color:var(--mask);border:1px solid var(--mask);border-radius:50%;width:32px;height:32px;display:grid;place-items:center;margin-top:2px}
+.body{display:flex;flex-direction:column;gap:10px;min-width:0}
+.dur{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:400;margin-left:8px}
+.said{background:var(--user);border-radius:6px;padding:8px 12px;font-size:14px}
+.said b{font-family:var(--mono);font-size:12px;font-weight:400;color:var(--muted);margin-right:8px}
+.reply{border-left:2px solid var(--line);padding-left:14px;display:flex;flex-direction:column;gap:8px}
+.reply ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:2px}
+.log{font-size:14px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.log div{padding-left:14px;position:relative}
+.log div::before{content:"";position:absolute;left:0;top:.75em;width:6px;height:1px;background:var(--muted)}
+.log strong{color:var(--fg);font-weight:500}
+.ok{color:var(--ok);font-weight:500}
+.note{background:var(--copper-soft);border-radius:6px;padding:8px 12px;font-size:14px}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:460px}
+th,td{text-align:left;padding:8px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+th{width:130px;font-weight:400;color:var(--muted)}
+tr:last-child th,tr:last-child td{border-bottom:0}
+.bars{padding:16px;display:flex;flex-direction:column;gap:14px}
+.bar-row{display:grid;grid-template-columns:minmax(92px,150px) minmax(0,1fr) 74px;gap:12px;align-items:center;font-size:14px}
+.track{height:14px;background:var(--mask-soft);border-radius:2px;position:relative}
+.fill{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--mask)}
+.fill.cu{background:var(--copper)}
+.val{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.foot{font-size:13px;color:var(--muted)}
+@media (max-width:520px){.stage{grid-template-columns:minmax(0,1fr)}.idx{margin-bottom:8px}.bar-row{grid-template-columns:minmax(0,1fr) 74px}.bar-row .track{grid-column:1 / -1;grid-row:2}}
+</style>
+</head>
+<body>
+
+<div class="page">
+<header>
+  <div class="eyebrow">KiCad TP1212_2L · Rev A · 2026-10-09</div>
+  <h1>TP1212 制板与立创下单记录</h1>
+  <p class="sub">从布线完成、导出 Gerber,到嘉立创下单页填好参数的全过程。订单尚未提交,未付款。</p>
+</header>
+
+<section class="sheet" aria-label="当前下单参数">
+  <div class="sheet-h"><span>FAB SPEC · 当前下单参数</span><span>10 片 · 裸 PCB</span></div>
+  <dl class="spec" style="margin:0">
+    <div><dt>板框尺寸</dt><dd>31 × 30 mm</dd></div>
+    <div><dt>层数 / 板材</dt><dd>2 层 FR-4</dd></div>
+    <div><dt>板厚 / 外层铜厚</dt><dd>1.6 mm / 1 oz</dd></div>
+    <div><dt>阻焊 / 字符</dt><dd>绿油 / 白字</dd></div>
+    <div><dt>表面处理</dt><dd>有铅喷锡 HASL</dd></div>
+    <div><dt>测试 / 阻抗</dt><dd>全测 / 无管控</dd></div>
+    <div><dt>确认生产稿</dt><dd>手动确认 2 次</dd></div>
+    <div class="price"><dt>制板预估价</dt><dd>25.85 元</dd></div>
+  </dl>
+</section>
+
+<section aria-labelledby="h-log">
+  <h2 id="h-log" style="margin-bottom:20px">过程记录</h2>
+
+  <div class="stage">
+    <div class="idx">1</div>
+    <div class="body">
+      <h2>布局布线完成<span class="dur">用时 9m 55s</span></h2>
+      <div class="said"><b>6:47</b>继续</div>
+      <div class="reply">
+        <p>修正版已完成布局布线,已打开 KiCad 和可视化预览。</p>
+        <ul>
+          <li>J2 原位固定,XS1 在对面板边居中。</li>
+          <li>U4 沿用原封装,顶层禁走线、底层允许走线。</li>
+          <li>检查结果:<span class="ok">0 条 DRC 违规、0 个未连接项</span>。</li>
+        </ul>
+        <p>当前为工程版,射频阻抗和样机性能仍待验证。</p>
+      </div>
+      <div class="log"><div><strong>已编辑 7 个文件(+158 −18)</strong>:route_board.py、verify_board.py、finish_board.py 等</div></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="idx">2</div>
+    <div class="body">
+      <h2>生成制板文件<span class="dur">用时 13m 59s</span></h2>
+      <div class="said"><b>6:57</b>我看没什么问题了能出一份制板文件吗?我发立创打样</div>
+      <div class="reply">
+        <p>制板包已生成并校验完成,可直接上传立创:</p>
+        <ul>
+          <li>制板 ZIP:<code>TP1212_2L_RevA_20261009_JLC_Gerber.zip</code></li>
+          <li>下单参数说明:<code>立创下单说明.txt</code></li>
+        </ul>
+        <p>下单参数:2 层、FR4、1.6 mm、31×30 mm、1 oz;建议绿油白字、沉金。已按立创要求导出 RS-274X,核对了板框、钻孔和各层;DRC 为 0 违规、0 未连接。射频性能仍需样机实测。</p>
+      </div>
+      <div class="log"><div><strong>已编辑 7 个文件(+176 −8)</strong>:finish_board.py、sync_library.py、verify_board.py 等</div></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="idx">3</div>
+    <div class="body">
+      <h2>委托代为投板</h2>
+      <div class="said"><b>7:15</b>我有立创账号你能给做投板工作吗?</div>
+      <div class="reply">
+        <p>可以,我可以帮你上传制板包、核对解析结果并填写打样参数。提交订单和付款前,会把板数、工艺、价格及收货信息列给你确认。登录和验证码由你在网页中完成,不需要把密码发给我。</p>
+      </div>
+      <div class="log">
+        <div>检查可用的浏览器连接:浏览器控制组件缺失文件,网页登录连接暂时无法启动</div>
+        <div>改用电脑操作技能:<span class="ok">已连上本机已登录的“嘉立创下单助手”</span></div>
+      </div>
+      <div class="said"><b>数量</b>10 片</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="idx">4</div>
+    <div class="body">
+      <h2>上传 Gerber 并填写参数(沉金方案)</h2>
+      <div class="log">
+        <div><strong>上传</strong>:制板包上传成功,识别为 2 层、31 × 30 mm,与设计一致。上传页曾提示“未发现可用图形”,是预览未完成时的提示,随后预览正常显示。</div>
+        <div><strong>生产稿</strong>:选“手动确认生产稿”(3 元),便于投产前复核孔位和焊盘。</div>
+        <div><strong>工艺</strong>:1 oz、绿油白字、沉金,最小孔径 0.3 mm;默认勾选的额外赔付服务改为普通合同;补充两个安装孔及 XS1 小孔的加工备注。</div>
+        <div><strong>报价</strong>:制板预估 137.28 元(不含运费);没有“7268”板材,采用标准 FR-4、TG135、1.6 mm。</div>
+        <div><strong>交期</strong>:当前为 48 小时免费加急(不含物流);已关闭贴片推广弹窗。</div>
+        <div><strong>其他</strong>:裸板选项确认、工程备注已填;账号默认“审核后自动扣款”已改为“手动确认订单”;送货单改电子版,发票沿用账号设置。</div>
+      </div>
+      <p class="note">截至此处尚未提交订单或扣款。</p>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="idx">5</div>
+    <div class="body">
+      <h2>参考历史订单,改为有铅喷锡</h2>
+      <div class="said"><b>17:53</b>继续</div>
+      <div class="reply">
+        <p>新板工艺按历史订单参考:2 层 FR-4、1.6 mm、1 oz、绿油白字、过孔盖油、全测、无阻抗管控;表面处理由沉金改为<strong>有铅喷锡</strong>。数量仍按本次指定的 10 片单板,尺寸 31 × 30 mm。历史单的拼板数量、SMT 和 13 元运费不直接套用,重新核价。</p>
+      </div>
+      <div class="sheet">
+        <div class="sheet-h"><span>参考订单 Y483</span><span>2026-08-25 15:18</span></div>
+        <div class="tablewrap"><table>
+          <tr><th>文件名</th><td>TP1212_TEST_V1_0_260824_CAM</td></tr>
+          <tr><th>交期</th><td>24 小时免费加急(SMT 专享)</td></tr>
+          <tr><th>板材 / 层数</th><td>FR-4 / 2 层,成品板厚 1.6 mm,外层铜厚 1 oz</td></tr>
+          <tr><th>数量 / 尺寸</th><td>5 片(小板 100),15.64 × 13.4 cm</td></tr>
+          <tr><th>阻焊 / 字符</th><td>绿色 / 白色,过孔盖油</td></tr>
+          <tr><th>表面处理</th><td>有铅喷锡</td></tr>
+          <tr><th>测试</th><td>全部测试;确认生产稿需要(2 次)</td></tr>
+          <tr><th>阻抗管控</th><td>无要求</td></tr>
+          <tr><th>SMT / 运输</th><td>需要贴片 / 顺丰特快(样板收费加急外不包邮),运费 13 元</td></tr>
+          <tr><th>发票 / 单据</th><td>增值税电子专用发票;不需要收据、送货单和宣传单</td></tr>
+        </table></div>
+      </div>
+      <div class="reply">
+        <p>原压缩包的加工说明也写了“建议沉金”,所以生成了明确标注 HASL 的投板包:</p>
+        <ul>
+          <li>新包:<code>TP1212_2L_RevA_20261009_HASL_10pcs.zip</code></li>
+          <li>只有 <code>FAB_NOTES.txt</code> 变更(沉金改为有铅喷锡,并注明 10 片单板)</li>
+          <li><span class="ok">铜层、阻焊、丝印、板框、钻孔等 9 个文件与原 RevA 包逐字节一致</span></li>
+          <li>已写入校验记录 <code>package-verification.json</code> 与 <code>本次下单参数.txt</code>(含 SHA256)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="idx">6</div>
+    <div class="body">
+      <h2>重新上传与最新报价</h2>
+      <div class="log">
+        <div>新版 HASL 包已上传并显示预览;数量重填为 10 片,保留两次手动确认生产稿。</div>
+        <div>有铅喷锡与过孔盖油已选好,费用较沉金方案明显下降;补齐加工备注,检查默认附加收费。</div>
+      </div>
+      <div class="sheet">
+        <div class="sheet-h"><span>制板预估价,不含运费</span><span>单位:元</span></div>
+        <div class="bars">
+          <div class="bar-row"><span>沉金 ENIG</span><div class="track"><div class="fill cu" style="width:100%"></div></div><span class="val">137.28</span></div>
+          <div class="bar-row"><span>有铅喷锡 HASL</span><div class="track"><div class="fill" style="width:18.83%"></div></div><span class="val">25.85</span></div>
+        </div>
+      </div>
+      <p>改为电子送货单后还会减去纸质单据费用。配送页显示顺丰特快预估运费 13 元,也有包邮选项,最终确认时会一并列出。</p>
+      <p class="note">订单尚未提交、未付款;地址与最终金额待你确认。射频阻抗与样机性能仍需实测验证。</p>
+    </div>
+  </div>
+</section>
+
+<p class="foot">来源:Claude 与用户的会话记录,已去除用量限额相关提示。</p>
+</div>
+</body>
+</html>
